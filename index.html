@@ -60,7 +60,7 @@ main{max-width:1280px;margin:16px auto 40px;padding:0 20px;display:grid;grid-tem
 .cabtitle{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
 .cabtitle h2{margin:0;font-size:17px}
 .cabtitle span{font-size:12.5px;color:var(--muted)}
-.frame{border:3px solid #c9d3ce;border-radius:10px;background:#e9eeeb;padding:6px;overflow-x:auto}
+.frame{position:relative;border:3px solid #c9d3ce;border-radius:10px;background:#e9eeeb;padding:6px;overflow-x:auto}
 .shelf{display:flex;width:max-content;min-width:100%;align-items:stretch;gap:6px;padding:6px 0;border-bottom:4px solid #c9d3ce}
 .shelf:last-child{border-bottom:0}
 .slab{flex:none;width:38px;position:sticky;left:-6px;z-index:1;background:#e9eeeb;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10.5px;color:var(--muted);line-height:1.1}
@@ -89,6 +89,17 @@ main{max-width:1280px;margin:16px auto 40px;padding:0 20px;display:grid;grid-tem
 .btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}
 #msg{font-size:13.5px;margin-top:8px}
 @media (max-width:860px){
+  html,body{overflow-anchor:none}
+  body{padding-top:66px}
+  header{padding:12px 16px 14px}
+  h1{font-size:19px}
+  .searchbar{position:fixed;top:0;left:0;right:0;margin:0;padding:8px 10px;background:var(--brand);z-index:10;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+  .sbox{box-shadow:none;border-radius:12px;padding:3px 4px 3px 12px}
+  main{margin-top:12px;padding:0 12px;min-height:100vh}
+  .hint{display:none}
+  #focus{scroll-margin-top:76px}
+  .sbox{padding-left:14px}
+  #q{font-size:17px;padding:10px 0}
   main{grid-template-columns:1fr}
   #results{position:static;max-height:none}
   header{padding-bottom:58px}
@@ -174,7 +185,7 @@ function search(){
     list.forEach(x=>hits.add(x.code));
     R.innerHTML=`<div class="rhead"><span>ตำแหน่งที่ขึ้นต้นด้วย <b>${esc(p)}</b></span><span>${list.length} ช่อง</span></div>`+
       list.map(x=>`<div class="item"><div class="locs"><button class="loc" data-code="${esc(x.code)}">${esc(x.code)}</button></div><div class="iname" style="margin-top:6px">${x.name?esc(x.name):'<span style="color:#a3b0aa">— ช่องว่าง —</span>'}</div></div>`).join('');
-    bindLocs(); renderTabs(); if(list[0]) pick(list[0].code,false); return;
+    bindLocs(); renderTabs(); if(list[0]&&!isMobile()) pick(list[0].code,false); else paintCab(); return;
   }
   list=ALL.filter(x=>x.name && (toks.every(t=>x.n.includes(t)) || x.c.includes(qc)));
   const groups=new Map();
@@ -184,8 +195,9 @@ function search(){
   if(!arr.length){ R.innerHTML=`<div class="rhead"><span>ผลการค้นหา</span></div><div class="empty-state">ไม่พบยา <b>“${esc(raw)}”</b><br>ลองพิมพ์ให้สั้นลง เช่นเฉพาะชื่อยา โดยไม่ใส่ความแรง</div>`; renderTabs(); paintCab(); return; }
   R.innerHTML=`<div class="rhead"><span>พบ ${arr.length} รายการ</span><span>${list.length} ตำแหน่ง</span></div>`+
     arr.map(g=>`<div class="item"><div class="iname">${hl(g.name,toks)}</div><div class="locs">${g.locs.map(x=>`<button class="loc" data-code="${esc(x.code)}">${esc(x.code)}</button>`).join('')}</div></div>`).join('');
-  bindLocs(); renderTabs(); pick(arr[0].locs[0].code,false);
+  bindLocs(); renderTabs(); if(!isMobile()) pick(arr[0].locs[0].code,false); else paintCab();
 }
+const isMobile=()=>innerWidth<=860;
 function hl(name,toks){
   let s=esc(name); toks.filter(t=>t.length>0).sort((a,b)=>b.length-a.length).forEach(t=>{
     const re=new RegExp('('+t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig'); s=s.replace(re,'<mark>$1</mark>');
@@ -202,7 +214,11 @@ function pick(code,scroll){
     <span>ตู้<b>${esc(x.cab)}</b></span>${isRB?'':`<span>ชั้น<b>${x.sh}</b></span>`}<span>ช่อง<b>${x.sl}</b></span></div></div></div>`;
   markLocs();
   const el=document.querySelector(`.slot[data-code="${CSS.escape(code)}"]`);
-  if(el){ el.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); if(scroll && innerWidth<=860) $('focus').scrollIntoView({behavior:'smooth',block:'start'}); }
+  if(el){
+    // scroll only inside the cabinet frame (horizontal) – never move the page while typing
+    const fr=el.closest('.frame'); if(fr) fr.scrollTo({left:el.offsetLeft-fr.clientWidth/2+el.offsetWidth/2,behavior:'smooth'});
+    if(scroll && innerWidth<=860){ $('q').blur(); $('focus').scrollIntoView({behavior:'smooth',block:'start'}); }
+  }
 }
 
 function renderTabs(){
@@ -263,7 +279,7 @@ $('file').onchange=async e=>{
   e.target.value='';
 };
 
-let t; $('q').addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(search,80); });
+let t; $('q').addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(()=>{ search(); if(isMobile()&&scrollY>0) window.scrollTo(0,0); },120); });
 $('q').addEventListener('keydown',e=>{ if(e.key==='Enter'){ const b=document.querySelector('.loc'); if(b) pick(b.dataset.code,true); } if(e.key==='Escape'){ $('q').value=''; search(); }});
 $('clear').onclick=()=>{ $('q').value=''; search(); $('q').focus(); };
 document.addEventListener('keydown',e=>{ if(e.key==='/' && document.activeElement!==$('q')){ e.preventDefault(); $('q').focus(); }});
